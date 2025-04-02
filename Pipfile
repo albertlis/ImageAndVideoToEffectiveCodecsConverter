@@ -6,6 +6,9 @@ name = "pypi"
 [packages]
 pillow-heif = "*"
 tqdm = "*"
+imagehash = "*"
+customtkinter = "*"
+filetype = "*"
 
 [dev-packages]
 jupyter = "*"
