@@ -2,6 +2,9 @@
 
 This repository contains a set of Python utilities for converting images and videos, finding similar images, filtering duplicates, checking file integrity, and comparing images using a GUI application.
 
+## Project Status
+Draft. The project is in the early stages of development and may not be fully functional or stable. Features are being added and tested, but there may be bugs or incomplete functionality. Use at your own risk.
+
 ## Table of Contents
 
 - [Overview](#overview)

@@ -5,7 +5,6 @@ import pickle
 from dataclasses import dataclass, asdict
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
-from pprint import pprint
 
 import numpy as np
 import psutil
@@ -89,7 +88,10 @@ def hash_images_in_directory(directory: Path, hash_size: int) -> dict[Path, tupl
     all_paths = {file for file in directory.rglob('*') if file.is_file()}
     img_paths = [img_path for img_path in all_paths if img_path.suffix.lower() in SUPPORTED_EXTENSIONS]
 
-    pprint(f'Ignored files: {all_paths - set(img_paths)}')
+    ignored_files = all_paths - set(img_paths)
+    print("Ignored files:")
+    for p in ignored_files:
+        print(p.as_posix())
 
     input_data = [(img_path, hash_size) for img_path in img_paths]
     with Pool(processes=cpu_count()) as pool:

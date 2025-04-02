@@ -23,8 +23,23 @@ class ImageComparerApp:
         self.to_move_path.mkdir(exist_ok=True)  # Create moved images directory if it doesn't exist
 
         with open(json_file, 'rt', encoding='utf-8') as f:
-            self.similar_images: list[dict[str, str | int, tuple[int, int]]] = json.load(f)
+            similar_images = json.load(f)
 
+        # Keep track of filtered and skipped items
+        filtered_images = []
+
+        for item in similar_images:
+            img1_exists = os.path.exists(item['img1'])
+            img2_exists = os.path.exists(item['img2'])
+
+            if img1_exists and img2_exists:
+                filtered_images.append(item)
+            else:
+                print("Skipped pair:")
+                print(f"  img1: {item['img1']} - {'Exists' if img1_exists else 'Missing'}")
+                print(f"  img2: {item['img2']} - {'Exists' if img2_exists else 'Missing'}")
+
+        self.similar_images = filtered_images
         self.current_index: int = 0
         self.total_pairs: int = len(self.similar_images)
 
@@ -78,15 +93,11 @@ class ImageComparerApp:
         self.left_image: ImageTk.PhotoImage
         self.right_image: ImageTk.PhotoImage
 
-        # Bind window close event to save remaining entries
-        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
-
         self.display_current_pair()
 
     def display_current_pair(self) -> None:
-        if self.current_index >= len(self.similar_images):
+        if self.current_index >= self.total_pairs:
             messagebox.showinfo("End", "No more image pairs to display.")
-            self.on_closing()
             return
 
         pair = self.similar_images[self.current_index]
@@ -219,8 +230,6 @@ class ImageComparerApp:
             shutil.move(img_path, dest_path)
             print(f"Moved {img_path} to {dest_path}")
             # Remove the current pair from the list
-            del self.similar_images[self.current_index]
-            self.total_pairs = len(self.similar_images)  # Update total pairs
         except Exception as e:
             messagebox.showerror("Error", f"Could not move {img_path}: {e}")
         self.next_pair()
@@ -228,17 +237,6 @@ class ImageComparerApp:
     def next_pair(self) -> None:
         self.current_index += 1
         self.display_current_pair()
-
-    def on_closing(self) -> None:
-        """Save remaining unprocessed entries to output JSON and close the app."""
-        if self.similar_images:  # Only save if there are remaining entries
-            try:
-                with open(self.output_json, 'w', encoding='utf-8') as f:
-                    json.dump(self.similar_images, f, indent=4)
-                print(f"Saved remaining {len(self.similar_images)} pairs to {self.output_json}")
-            except Exception as e:
-                messagebox.showerror("Error", f"Could not save to {self.output_json}: {e}")
-        self.master.quit()
 
 
 if __name__ == "__main__":

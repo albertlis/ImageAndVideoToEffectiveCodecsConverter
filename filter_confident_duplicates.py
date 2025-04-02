@@ -19,6 +19,9 @@ def process_images(json_path: str, output_json_path: str, moved_copies_dir: str,
         img1 = entry["img1"]
         img2 = entry["img2"]
 
+        if img1 == img2:
+            continue
+
         stem1 = Path(img1).stem
         stem2 = Path(img2).stem
 
@@ -72,7 +75,7 @@ def process_images(json_path: str, output_json_path: str, moved_copies_dir: str,
 
     for entry in data:
         if entry["img1"] not in moved_files and entry["img2"] not in moved_files:
-            if entry not in filtered_data:
+            if entry not in filtered_data and entry["img1"] != entry["img2"]:
                 filtered_data.append(entry)
 
     filtered_data = sorted(filtered_data, key=lambda x: x["distance"])
