@@ -16,7 +16,7 @@ from tqdm import tqdm
 register_heif_opener()
 register_avif_opener()
 
-SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.heif', '.avif', '.heic', '.webp'}
+SUPPORTED_EXTENSIONS = set(Image.registered_extensions())
 
 
 @dataclass(slots=True)
@@ -41,10 +41,12 @@ def main():
     # with open('hashes_dir1.pkl', 'rb') as f:
     #     hashes_dir1 = pickle.load(f)
 
-    hashes_dir2 = hash_images_in_directory(args.dir2, args.hash_size)
-    with open('hashes_dir2.pkl', 'wb') as f:
-        pickle.dump(hashes_dir2, f)
+    # hashes_dir2 = hash_images_in_directory(args.dir2, args.hash_size)
+    # with open('hashes_dir2.pkl', 'wb') as f:
+    #     pickle.dump(hashes_dir2, f)
 
+    with open('hashes_dir1.pkl', 'rb') as f:
+        hashes_dir2 = pickle.load(f)
     similar_images = compare_hashes(hashes_dir1, hashes_dir2, args.distance)
     similar_images.sort(key=lambda x: x.distance)  # Sort by similarity score (Hamming distance)
 
@@ -103,26 +105,39 @@ def hash_images_in_directory(directory: Path, hash_size: int) -> dict[Path, tupl
 
 
 def compare_hashes(
-        hashes_dir1: dict[Path, tuple[ImageHash, float]],
-        hashes_dir2: dict[Path, tuple[ImageHash, float]],
-        max_distance: int
+    hashes_dir1: dict[Path, tuple[ImageHash, float]],
+    hashes_dir2: dict[Path, tuple[ImageHash, float]],
+    max_distance: int,
+    chunk_size: int = 1000
 ) -> list[MatchedPairInfo]:
     paths1 = list(hashes_dir1.keys())
     paths2 = list(hashes_dir2.keys())
-    distances = get_hash_differencies(hashes_dir1, hashes_dir2)
-    aspect_diffs = get_aspects_differences(hashes_dir1, hashes_dir2)
-
-    similar_mask = (distances < max_distance) & (aspect_diffs < 0.01)
-    similar_indices = np.where(similar_mask)
+    hashes2_array = np.array([h[0].hash for h in hashes_dir2.values()], dtype=bool)
+    aspects2 = np.array([h[1] for h in hashes_dir2.values()], dtype=np.float32)
 
     similar_images = []
-    with tqdm(total=np.sum(similar_mask), desc="Collecting similar images") as pbar:
+    total_chunks = (len(paths1) + chunk_size - 1) // chunk_size
+
+    for chunk_idx in tqdm(range(total_chunks), desc="Processing chunks"):
+        start_idx = chunk_idx * chunk_size
+        end_idx = min((chunk_idx + 1) * chunk_size, len(paths1))
+        chunk_paths1 = paths1[start_idx:end_idx]
+        chunk_hashes1 = np.array([hashes_dir1[p][0].hash for p in chunk_paths1], dtype=bool)
+        chunk_aspects1 = np.array([hashes_dir1[p][1] for p in chunk_paths1], dtype=np.float32)
+
+        # Compute differences for this chunk
+        differences = chunk_hashes1[:, np.newaxis, :, :] != hashes2_array[np.newaxis, :, :, :]
+        distances = np.sum(differences, axis=(2, 3), dtype=np.int32)
+        aspect_diffs = np.abs(chunk_aspects1[:, np.newaxis] - aspects2[np.newaxis, :])
+        similar_mask = (distances < max_distance) & (aspect_diffs < 0.01)
+
+        # Collect similar pairs
+        similar_indices = np.where(similar_mask)
         for i, j in zip(similar_indices[0], similar_indices[1]):
-            path1 = str(paths1[i])
+            path1 = str(chunk_paths1[i])
             path2 = str(paths2[j])
             distance = int(distances[i, j])
 
-            # Get codec and size info
             with Image.open(path1) as img1, Image.open(path2) as img2:
                 codec1 = img1.format.lower() if img1.format else Path(path1).suffix[1:].lower()
                 codec2 = img2.format.lower() if img2.format else Path(path2).suffix[1:].lower()
@@ -139,22 +154,8 @@ def compare_hashes(
                 distance=distance
             )
             similar_images.append(pair_info)
-            pbar.update(1)
 
     return similar_images
-
-
-def get_hash_differencies(hashes_dir1, hashes_dir2):
-    hashes1 = np.array([h[0].hash for h in hashes_dir1.values()], dtype=bool)
-    hashes2 = np.array([h[0].hash for h in hashes_dir2.values()], dtype=bool)
-    differences = hashes1[:, np.newaxis, :, :] != hashes2[np.newaxis, :, :, :]
-    return np.sum(differences, axis=(2, 3), dtype=np.int32)
-
-
-def get_aspects_differences(hashes_dir1, hashes_dir2):
-    aspects1 = np.array([h[1] for h in hashes_dir1.values()], dtype=np.float32)
-    aspects2 = np.array([h[1] for h in hashes_dir2.values()], dtype=np.float32)
-    return np.abs(aspects1[:, np.newaxis] - aspects2[np.newaxis, :])
 
 
 def write_similar_images_to_file(similar_images: list[MatchedPairInfo], output_file: str) -> None:

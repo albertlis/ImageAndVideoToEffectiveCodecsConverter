@@ -1,0 +1,23 @@
+[project]
+name = "image-and-video-to-effective-codecs-converter"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "pillow-heif",
+    "tqdm",
+    "imagehash",
+    "customtkinter",
+    "filetype",
+    "python-magic-bin",
+    "ffmpeg-python",
+    "rich>=15.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "jupyter",
+    "pandas",
+    "seaborn",
+    "numpy",
+    "pillow-avif-plugin",
+]

@@ -13,7 +13,10 @@ Draft. The project is in the early stages of development and may not be fully fu
 - [Usage](#usage)
   - [Convert Images](#convert-images)
   - [Convert Videos](#convert-videos)
-  - [Copy Videos](#copy-videos)
+  - [HandBrake Workflow](#handbrake-workflow)
+    - [Step 1 – Copy Videos to Flat Directory](#step-1--copy-videos-to-flat-directory)
+    - [Step 2 – Process in HandBrake](#step-2--process-in-handbrake)
+    - [Step 3 – Restore Processed Videos](#step-3--restore-processed-videos)
   - [Find Similar Images](#find-similar-images)
   - [Filter Duplicates](#filter-duplicates)
   - [Compare Images Application](#compare-images-application)
@@ -28,17 +31,34 @@ This project provides a collection of scripts and a GUI application to handle im
 
 1. **Image Conversion**: Convert images to efficient formats like HEIF and AVIF.
 2. **Video Conversion**: Convert videos to HEVC using FFmpeg with hardware acceleration support.
-3. **Video Copying**: Copy videos to a flat directory structure with a mapping file.
+3. **Video Copying / HandBrake Workflow**: Copy videos to a flat directory, batch-process in HandBrake, restore the original tree in a new location.
 4. **Similarity Detection**: Identify and filter visually similar images based on JSON data.
 5. **Duplicate Management**: Move duplicate images based on resolution, codec, and file size.
 6. **GUI Application**: Visually compare and manage similar image pairs.
 7. **Integrity Checking**: Verify the integrity of image and video files.
+
+Supported image formats:
+
+| Format   | Format   | Format | Format |
+|:---------|:---------|:-------|:-------|
+| **AVIF** | FITS     | JPEG   | PSD    |
+| BLP      | FLI      | JPEG2000 | QOI  |
+| BMP      | FTEX     | MPEG   | SGI    |
+| BUFR     | GBR      | MPO    | SUN    |
+| CUR      | GIF      | MSP    | TGA    |
+| DCX      | GRIB     | PALM   | TIFF   |
+| DDS      | HDF5     | PCD    | WEBP   |
+| DIB      | **HEIF** | PCX    | WMF    |
+| EPS      | ICNS     | PDF    | XBM    |
+| ICO      | IM       | PIXAR  | XPM    |
+| IPTC     | PNG      | PPM    |        |
 
 ## Features
 
 - **Image Conversion**: Convert images to HEIF or AVIF with customizable quality settings while preserving metadata.
 - **Video Conversion**: Use FFmpeg for HEVC encoding with Intel Quick Sync support.
 - **Video Copying**: Copy videos to a single directory with a JSON mapping of source-to-destination paths.
+- **Video Restore**: Reconstruct the original directory tree in a new location after HandBrake processing.
 - **Similarity Detection**: Process images to identify similar images. Results are saved in a JSON file for further processing.
 - **Duplicate Filtering**: Automatically move duplicates based on resolution, codec priority (AVIF > HEIF > PNG > Others), and file size.
 - **Interactive GUI**: Compare similar image pairs side-by-side, with options to move unwanted images and save progress.
@@ -55,8 +75,9 @@ pipenv install
 ```
 
 Additional dependencies:
-- **FFmpeg**: Required for video conversion and integrity checking. Install it via your package manager (e.g., `apt install ffmpeg` on Ubuntu, ```brew install ffmpeg` on macOS).
+- **FFmpeg**: Required for video conversion and integrity checking. Install it via your package manager (e.g., `apt install ffmpeg` on Ubuntu, `brew install ffmpeg` on macOS).
 - **Pillow with HEIF/AVIF support**: Ensure `pillow-heif` is installed (included in Pipenv).
+- **Rich**: Used for coloured logging and progress bars (included in Pipenv).
 
 ## Usage
 
@@ -84,16 +105,68 @@ pipenv run python convert_video.py -s /path/to/src_dir -d /path/to/dst_dir
 - `-s`: Source directory containing video files.
 - `-d`: Destination directory for converted videos.
 
-### Copy Videos
+---
 
-Copy videos to a flat directory structure with a mapping file using `copy_videos.py`:
+## HandBrake Workflow
 
-```bash
-pipenv run python copy_videos.py -s /path/to/src_dir -d /path/to/dst_dir
+A three-step pipeline for batch-converting a large video collection with HandBrake while preserving the original directory structure.
+
+```
+original tree  ──[copy_videos.py]──►  flat dir  ──[HandBrake]──►  hb_output  ──[restore_videos.py]──►  restored tree
 ```
 
-- `-s`: Source directory containing video files.
-- `-d`: Destination directory for copied videos (creates `file_mapping.json`).
+### Step 1 – Copy Videos to Flat Directory
+
+Recursively scan `src_path` and copy every video into a single flat directory. A `file_mapping.json` file recording the relative original paths is saved alongside the copies.
+
+```bash
+pipenv run python copy_videos.py -s /path/to/original_tree -f /path/to/flat_dir
+```
+
+- `-s` / `--src_path`: Root of the original directory tree.
+- `-f` / `--flat_path`: Flat destination directory (will be created if missing).
+
+Output `file_mapping.json` example:
+
+```json
+{
+  "holiday_clip.mp4": "2024/Summer/holiday_clip.mp4",
+  "holiday_clip_1.mp4": "2023/Archive/holiday_clip.mp4"
+}
+```
+
+### Step 2 – Process in HandBrake
+
+Open HandBrake, point it at the flat directory and configure your preset (e.g. H.265 / HEVC).  
+Set a **separate** output directory – this is your `hb_output_path` in step 3.  
+The output filename stem must match the input stem (HandBrake default behaviour).
+
+### Step 3 – Restore Processed Videos
+
+Copy the converted files from the HandBrake output directory into a new directory that mirrors the original tree. Matching is done by **stem** so extension changes (e.g. `.mp4` → `.mkv`) are handled automatically.
+
+```bash
+pipenv run python restore_videos.py \
+    -f /path/to/flat_dir \
+    -b /path/to/hb_output \
+    -r /path/to/restored_tree
+```
+
+- `-f` / `--flat_path`: Same flat directory used in step 1 (contains `file_mapping.json`).
+- `-b` / `--hb_output_path`: Directory where HandBrake wrote the converted files.
+- `-r` / `--restore_dst_path`: Root of the new restored tree (created if missing).
+
+**Collision policy**: if a file already exists in `restore_dst_path` it is **skipped** with a warning (originals are never touched).
+
+A summary table is printed at the end:
+
+| Status | Meaning |
+|--------|---------|
+| ✅ Restored | File copied successfully |
+| ⚠️ Skipped | File already exists in destination |
+| ❌ Missing | Stem found in mapping but not in HandBrake output |
+
+---
 
 ### Find Similar Images
 
