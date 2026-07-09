@@ -7,10 +7,9 @@ from tkinter import messagebox
 
 import customtkinter as ctk
 from PIL import Image, ImageTk
-from pillow_heif import register_heif_opener, register_avif_opener
+from pillow_heif import register_heif_opener
 
 register_heif_opener()
-register_avif_opener()
 
 
 class ImageComparerApp:
@@ -55,38 +54,43 @@ class ImageComparerApp:
         self.right_image_label = ctk.CTkLabel(self.right_frame, text="")
         self.right_image_label.place(relx=0.5, rely=0.5, anchor="center")
 
-        # Separate labels for path and size
+        # Separate labels for path, resolution, disk size
         # Left side
         self.left_path_label = ctk.CTkLabel(master, text="", justify="right", wraplength=600)
         self.left_path_label.grid(row=1, column=0, padx=10, pady=(10, 0), sticky="nsew")
         self.left_size_label = ctk.CTkLabel(master, text="", justify="right", wraplength=600)
-        self.left_size_label.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        self.left_size_label.grid(row=2, column=0, padx=10, pady=0, sticky="nsew")
+        self.left_disk_label = ctk.CTkLabel(master, text="", justify="right", wraplength=600)
+        self.left_disk_label.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="nsew")
 
         # Right side
         self.right_path_label = ctk.CTkLabel(master, text="", justify="left", wraplength=600)
         self.right_path_label.grid(row=1, column=1, padx=10, pady=(10, 0), sticky="nsew")
         self.right_size_label = ctk.CTkLabel(master, text="", justify="left", wraplength=600)
-        self.right_size_label.grid(row=2, column=1, padx=10, pady=(0, 10), sticky="nsew")
+        self.right_size_label.grid(row=2, column=1, padx=10, pady=0, sticky="nsew")
+        self.right_disk_label = ctk.CTkLabel(master, text="", justify="left", wraplength=600)
+        self.right_disk_label.grid(row=3, column=1, padx=10, pady=(0, 10), sticky="nsew")
 
         # Distance score label with counter
         self.score_label = ctk.CTkLabel(master, text="", justify="center")
-        self.score_label.grid(row=3, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.score_label.grid(row=4, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
         # Buttons
         self.delete_left_button = ctk.CTkButton(master, text="Delete Left Image", command=self.delete_left_image)
-        self.delete_left_button.grid(row=4, column=0, padx=10, pady=10, sticky="ew")
+        self.delete_left_button.grid(row=5, column=0, padx=10, pady=10, sticky="ew")
         self.delete_right_button = ctk.CTkButton(master, text="Delete Right Image", command=self.delete_right_image)
-        self.delete_right_button.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
+        self.delete_right_button.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
         self.next_button = ctk.CTkButton(master, text="Next Pair", command=self.next_pair)
-        self.next_button.grid(row=5, column=0, columnspan=2, pady=20, sticky="ew")
+        self.next_button.grid(row=6, column=0, columnspan=2, pady=20, sticky="ew")
 
         # Configure grid weights for consistent layout
-        self.master.grid_rowconfigure(0, weight=1)  # Image row expands
-        self.master.grid_rowconfigure(1, weight=0)  # Path row fixed
-        self.master.grid_rowconfigure(2, weight=0)  # Size row fixed
-        self.master.grid_rowconfigure(3, weight=0)  # Score row fixed
-        self.master.grid_rowconfigure(4, weight=0)  # Delete buttons row fixed
-        self.master.grid_rowconfigure(5, weight=0)  # Next button row fixed
+        self.master.grid_rowconfigure(0, weight=1)
+        self.master.grid_rowconfigure(1, weight=0)
+        self.master.grid_rowconfigure(2, weight=0)
+        self.master.grid_rowconfigure(3, weight=0)
+        self.master.grid_rowconfigure(4, weight=0)
+        self.master.grid_rowconfigure(5, weight=0)
+        self.master.grid_rowconfigure(6, weight=0)
         self.master.grid_columnconfigure(0, weight=1)
         self.master.grid_columnconfigure(1, weight=1)
 
@@ -166,6 +170,8 @@ class ImageComparerApp:
             right_path = img1_path
             left_size = img2_size
             right_size = img1_size
+            left_file_size = img2_file_size
+            right_file_size = img1_file_size
         else:
             left_img = img1
             right_img = img2
@@ -173,6 +179,8 @@ class ImageComparerApp:
             right_path = img2_path
             left_size = img1_size
             right_size = img2_size
+            left_file_size = img1_file_size
+            right_file_size = img2_file_size
 
         left_img.thumbnail((600, 600))
         right_img.thumbnail((600, 600))
@@ -183,29 +191,41 @@ class ImageComparerApp:
         self.left_image_label.configure(image=self.left_image)
         self.right_image_label.configure(image=self.right_image)
 
-        # Determine colors based on which image is better
+        # Determine colors based on hierarchy: resolution > codec > disk size
         left_path_color = "#FFFFFF"
         left_size_color = "#FFFFFF"
+        left_disk_color = "#FFFFFF"
         right_path_color = "#FFFFFF"
         right_size_color = "#FFFFFF"
+        right_disk_color = "#FFFFFF"
 
-        if swap:  # img2 is better (on the left)
+        better_filesize = not better_resolution and not better_codec and left_file_size != right_file_size
+
+        if swap:  # left image is better
             if better_resolution:
-                left_size_color = "#00FF00"  # Green for resolution
+                left_size_color = "#00FF00"
             elif better_codec:
-                left_path_color = "#00FF00"  # Green for codec
-        else:  # img1 is better (on the left) or no difference
+                left_path_color = "#00FF00"
+            elif better_filesize:
+                left_disk_color = "#00FF00"
+        else:
             if img1_is_better:
                 if better_resolution:
-                    left_size_color = "#00FF00"  # Green for resolution
+                    left_size_color = "#00FF00"
                 elif better_codec:
-                    left_path_color = "#00FF00"  # Green for codec
+                    left_path_color = "#00FF00"
+                elif better_filesize:
+                    left_disk_color = "#00FF00"
+            elif not img1_is_better and better_filesize:
+                right_disk_color = "#00FF00"
 
         # Set text and colors
         self.left_path_label.configure(text=f"{left_path}", text_color=left_path_color)
-        self.left_size_label.configure(text=f"Size: {left_size[0]}x{left_size[1]}", text_color=left_size_color)
+        self.left_size_label.configure(text=f"{left_size[0]}x{left_size[1]}", text_color=left_size_color)
+        self.left_disk_label.configure(text=f"{left_file_size / 1024 / 1024:.2f} MB", text_color=left_disk_color)
         self.right_path_label.configure(text=f"{right_path}", text_color=right_path_color)
-        self.right_size_label.configure(text=f"Size: {right_size[0]}x{right_size[1]}", text_color=right_size_color)
+        self.right_size_label.configure(text=f"{right_size[0]}x{right_size[1]}", text_color=right_size_color)
+        self.right_disk_label.configure(text=f"{right_file_size / 1024 / 1024:.2f} MB", text_color=right_disk_color)
 
         # Distance color: red if > 0, white otherwise
         score_color = "#FF0000" if distance > 0 else "#FFFFFF"

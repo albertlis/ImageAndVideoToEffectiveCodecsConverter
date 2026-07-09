@@ -11,6 +11,12 @@ dependencies = [
     "python-magic-bin",
     "ffmpeg-python",
     "rich>=15.0.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "scipy>=1.12.0",
+    "numpy>=1.26.0",
+    "mutagen>=1.47.0",
+    "pydub>=0.25.0",
 ]
 
 [dependency-groups]

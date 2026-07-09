@@ -35,6 +35,7 @@ from rich.progress import (
 )
 
 from logger_config import get_logger
+from timestamps import copy_timestamps
 
 logger = get_logger(__name__)
 
@@ -196,6 +197,7 @@ def copy_videos(src_path: Path, flat_path: Path) -> None:
             dst_file = unique_flat_path(flat_path, src_file.name)
 
             shutil.copy2(src_file, dst_file)
+            copy_timestamps(src_file, dst_file)
             file_mapping[dst_file.name] = rel_path.as_posix()
             logger.debug(f"Copied  [cyan]{rel_path}[/cyan] → [yellow]{dst_file.name}[/yellow]")
             progress.advance(task)

@@ -10,11 +10,10 @@ import numpy as np
 import psutil
 from PIL import Image
 from imagehash import ImageHash, phash
-from pillow_heif import register_heif_opener, register_avif_opener
+from pillow_heif import register_heif_opener
 from tqdm import tqdm
 
 register_heif_opener()
-register_avif_opener()
 
 SUPPORTED_EXTENSIONS = set(Image.registered_extensions())
 
@@ -51,7 +50,8 @@ def main():
     similar_images.sort(key=lambda x: x.distance)  # Sort by similarity score (Hamming distance)
 
     write_similar_images_to_file(similar_images, args.output_file)
-    print(f"Similar images written to {args.output_file}.json")
+    out_path = args.output_file if args.output_file.endswith('.json') else f"{args.output_file}.json"
+    print(f"Similar images written to {out_path}")
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -116,6 +116,7 @@ def compare_hashes(
     aspects2 = np.array([h[1] for h in hashes_dir2.values()], dtype=np.float32)
 
     similar_images = []
+    seen_pairs: set[frozenset[str]] = set()
     total_chunks = (len(paths1) + chunk_size - 1) // chunk_size
 
     for chunk_idx in tqdm(range(total_chunks), desc="Processing chunks"):
@@ -125,17 +126,21 @@ def compare_hashes(
         chunk_hashes1 = np.array([hashes_dir1[p][0].hash for p in chunk_paths1], dtype=bool)
         chunk_aspects1 = np.array([hashes_dir1[p][1] for p in chunk_paths1], dtype=np.float32)
 
-        # Compute differences for this chunk
         differences = chunk_hashes1[:, np.newaxis, :, :] != hashes2_array[np.newaxis, :, :, :]
         distances = np.sum(differences, axis=(2, 3), dtype=np.int32)
         aspect_diffs = np.abs(chunk_aspects1[:, np.newaxis] - aspects2[np.newaxis, :])
         similar_mask = (distances < max_distance) & (aspect_diffs < 0.01)
 
-        # Collect similar pairs
         similar_indices = np.where(similar_mask)
         for i, j in zip(similar_indices[0], similar_indices[1]):
             path1 = str(chunk_paths1[i])
             path2 = str(paths2[j])
+            if path1 == path2:
+                continue
+            pair_key = frozenset([path1, path2])
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
             distance = int(distances[i, j])
 
             with Image.open(path1) as img1, Image.open(path2) as img2:
@@ -159,9 +164,9 @@ def compare_hashes(
 
 
 def write_similar_images_to_file(similar_images: list[MatchedPairInfo], output_file: str) -> None:
-    # Convert MatchedPairInfo objects to dictionaries for JSON serialization
     pairs = [asdict(pair) for pair in similar_images]
-    with open(f"{output_file}.json", 'wt', encoding='utf-8') as f:
+    out_path = output_file if output_file.endswith('.json') else f"{output_file}.json"
+    with open(out_path, 'wt', encoding='utf-8') as f:
         json.dump(pairs, f, indent=2, ensure_ascii=False)
 
 
